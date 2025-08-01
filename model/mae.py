@@ -45,34 +45,36 @@ class TemporalEdgeMAE(nn.Module):
             edge_mask: (B, T, N, N) bool mask of which entries were hidden
         """
         # collapse time into batch
-        B, T, N, _ = a.shape
-        a_flat = a.view(B * T, N, N)
 
-        # now do exactly what you had for the 3D case
-        flat = a_flat.view(B * T, -1)
+        # now a is (B, N, N)  → we flatten each of the B adjacency matrices
+        B, N, _ = a.shape
+        flat = a.view(B, -1)
         total = flat.size(1)
         k = int(self.edge_masking_ratio * total)
 
+
         masks = torch.zeros_like(flat, dtype=torch.bool)
-        for i in range(B * T):
+        for b in range(B):
             idx = torch.randperm(total, device=a.device)[:k]
-            masks[i, idx] = True
+            masks[b, idx] = True
+
 
         flat_masked = flat.clone()
         flat_masked[masks] = 0
 
-        # reshape back to (B,T,N,N)
-        a_masked = flat_masked.view(B, T, N, N)
-        edge_mask = masks.view(B, T, N, N)
+        # reshape back to (B, N, N)
+        a_masked  = flat_masked.view(B, N, N)
+        edge_mask = masks.view(B, N, N)
         return a_masked, edge_mask
 
+
     def forward(self, x, a=None):
-        # 1) force (B, D, T, V) → (B, N=T*V, D)
         B, C, T, V = x.shape
         N = T * V
-        x = x.permute(0,2,3,1).reshape(B, N, C)
+        # 1) flatten
+        x = x.permute(0,2,3,1).reshape(B, N, C)  # (B, N, node_dim)
 
-        # 2) if no adjacency given, build the temporal one
+        # 2) build temporal A if not given
         if a is None:
             mask = torch.zeros(N, N, dtype=torch.bool, device=x.device)
             for t in range(T-1):
@@ -81,39 +83,34 @@ class TemporalEdgeMAE(nn.Module):
                     for dst in dests:
                         j = (t+1)*V + dst
                         mask[i, j] = True
-            a = mask.unsqueeze(0).expand(B, N, N)
+            a = mask.unsqueeze(0).expand(B, N, N)  # (B, N, N)
 
-        # 3) mask some edges
+        # 3) randomly mask out edges
         a_masked, edge_mask = self._generate_edge_mask(a)  # (B,N,N),(B,N,N)
 
-        # 4) encode + pos-embed
-        emb = self.encoder.to_node_embedding(x)            # (B,N,enc_dim)
-        emb = emb.permute(0, 2, 1)                         # → (B, N, enc_dim)
-        # emb = emb + self.encoder.pos_embedding             # (1,N,enc_dim)
+        # 4) node‐embedding → (B, enc_dim, N), then permute to (B, N, enc_dim)
+        emb = self.encoder.to_node_embedding(x).permute(0,2,1)
 
+        # 5) transformer over (B,N,enc_dim) with temporal adjacency
         enc = self.encoder.transformer(emb, a_masked)      # (B,N,enc_dim)
         dec = self.enc_to_dec(enc)                         # (B,N,dec_dim)
 
-        # 5) reconstruct edges
-        Zi = dec.unsqueeze(2).expand(B,N,N,-1)
-        Zj = dec.unsqueeze(1).expand(B,N,N,-1)
-        feats = torch.cat([Zi, Zj], dim=-1)                # (B,N,N,2*dec)
+        # 6) decode pairwise edges and compute loss
+        Zi = dec.unsqueeze(2).expand(B, N, N, -1)
+        Zj = dec.unsqueeze(1).expand(B, N, N, -1)
+        feats = torch.cat([Zi, Zj], dim=-1)                # (B,N,N,2*dec_dim)
         edge_pred = self.edge_decoder(feats).squeeze(-1)   # (B,N,N)
-
-        # 6) loss over the masked entries
-        loss = F.mse_loss(edge_pred[edge_mask], a[edge_mask])
+        loss = F.mse_loss(edge_pred[edge_mask], a.float()[edge_mask])
         return edge_pred, loss
 
-    def inference(self, x: torch.Tensor, a: torch.Tensor):
-        """
-        Compute embeddings without masking and return edge predictions.
-        """
-        B, N, _ = x.shape
-        # emb = self.encoder.to_node_embedding(x) + self.encoder.pos_embedding
-        emb = self.encoder.to_node_embedding(x)
+
+    def inference(self, x, a):
+        B, C, T, V = x.shape
+        N = T * V
+        x = x.permute(0,2,3,1).reshape(B, N, C)
+        emb = self.encoder.to_node_embedding(x).permute(0,2,1)
         enc = self.encoder.transformer(emb, a)
         dec = self.enc_to_dec(enc)
         Zi = dec.unsqueeze(2).expand(B, N, N, -1)
         Zj = dec.unsqueeze(1).expand(B, N, N, -1)
-        edge_feats = torch.cat([Zi, Zj], dim=-1)
-        return self.edge_decoder(edge_feats).squeeze(-1)  # (B, N, N)
+        return self.edge_decoder(torch.cat([Zi, Zj], dim=-1)).squeeze(-1)

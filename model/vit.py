@@ -6,7 +6,7 @@ from timm.models.layers import trunc_normal_
 
 import sys
 sys.path.append('./utils/')
-from pose_embedding import PosEmbFactory
+from utils.pose_embedding import PosEmbFactory
 
 # helpers
 def pair(t):

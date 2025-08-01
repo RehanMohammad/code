@@ -5,13 +5,30 @@ import os
 import os.path as opt
 
 
+def build_batch_temporal_adj(a4):
+    # a4: (B, T, V, V) boolean
+    B, T, V, _ = a4.shape
+    N = T * V
+    A = torch.zeros(B, N, N, dtype=torch.bool, device=a4.device)
+    for b in range(B):
+        for t in range(T - 1):
+            # place the V×V adjacency of frame t into the big block
+            A[b,
+              t*V : (t+1)*V, 
+              (t+1)*V : (t+2)*V
+             ] = a4[b, t]
+    return A
+
+
+
 def train_one_epoch(epoch, num_epochs, model, dataloader, optimizer, scheduler, device):
     model.train()
     pbar = tqdm(dataloader, total=len(dataloader))
     losses = []
     for d in pbar:
-        seq = d['Sequence'].to(device)
-        A   = d['A_temporal'].to(device)
+        seq = d['Sequence'].to(device)    # (B, C, T, V)
+        a4  = d['A_temporal'].to(device)          # (B, T, V, V)
+        A   = build_batch_temporal_adj(a4)  # (B, N, N)
 
         optimizer.zero_grad()
         edge_pred, loss = model(seq, A)
@@ -33,10 +50,13 @@ def valid_one_epoch(model, dataloader, device):
     losses = []
     with torch.no_grad():
         for d in pbar:
-            seq = d['Sequence'].to(device)
-            A   = d['AM'].to(device)
-            _, loss = model(seq, A)
 
+
+            seq = d['Sequence'].to(device)    # (B, C, T, V)
+            a4  = d['A_temporal'].to(device)          # (B, T, V, V)
+            A   = build_batch_temporal_adj(a4)  # (B, N, N)
+
+            _, loss = model(seq, A)
             losses.append(loss.item())
             avg = sum(losses) / len(losses)
             pbar.set_description(f"[VALID] loss: {avg:.4f}")

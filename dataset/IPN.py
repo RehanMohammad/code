@@ -29,26 +29,26 @@ HAND_CONNECTIONS = [
 
 _TEMPORAL_RULES = {
      0: [ 0,  1,  5,  9, 13, 17,  4,  8, 12, 16, 20],
-     1: [ 0,  2,  5],
-     2: [ 1,  3],
-     3: [ 2,  4,  0],
-     4: [ 0,  3],
-     5: [ 0,  1,  9,  6],
-     6: [ 5,  7],
-     7: [ 6,  8,  0],
-     8: [ 0,  7],
-     9: [ 0,  5, 13, 10],
-    10: [ 9, 11],
-    11: [10, 12,  0],
-    12: [11,  0],
-    13: [ 0,  9, 17, 14],
-    14: [13, 15],
-    15: [14, 16,  0],
-    16: [ 0, 15],
-    17: [ 0, 13, 18],
-    18: [19, 17],
-    19: [20, 18],
-    20: [ 0, 19],
+     1: [ 0,  1,  2,  5],
+     2: [ 1,  2,  3],
+     3: [ 2,  3,  4,  0],
+     4: [ 0,  3,  4],
+     5: [ 0,  1,  5, 9,  6],
+     6: [ 5,  6, 7],
+     7: [ 6,  7, 8,  0],
+     8: [ 0,  7, 8],
+     9: [ 0,  5, 9, 13, 10],
+    10: [ 9, 10, 11],
+    11: [10, 11, 12,  0],
+    12: [11,  12, 0],
+    13: [ 0,  9, 13, 17, 14],
+    14: [13, 14, 15],
+    15: [14, 16,  15, 0],
+    16: [ 0, 15, 16],
+    17: [ 0, 13, 17, 18],
+    18: [19, 17, 18],
+    19: [20, 18, 19],
+    20: [ 0, 19, 20],
 }
 
 # Sanity‑check: every joint is present
@@ -111,7 +111,7 @@ class IPNDataset(Dataset):
     Reads IPN annotations (.csv) and landmark .txt files.
     Returns: {'Sequence': Tensor(C=5, T=max_seq, V=21), 'Label': LongTensor}
     """
-    def __init__(self, data_dir, ann_file, max_seq=80, normalize=True):
+    def __init__(self, data_dir, ann_file, max_seq=4, normalize=True):
         self.data_dir  = data_dir
         self.ann_file  = ann_file
         self.max_seq   = max_seq

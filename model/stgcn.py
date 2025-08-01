@@ -32,13 +32,13 @@ class unit_gcn(nn.Module):
                  kernel_size=1,
                  stride=1,
                  mask_learning=False):
-        super(unit_gcn, self).__init__()
+        super(unit_gcn, self)._init_()
 
         # ==========================================
         # number of nodes
         self.V = A.size()[-1]
 
-        # the *default* adjacency matrix (static spatial or combined spatio‑temporal)
+        # the default adjacency matrix (static spatial or combined spatio‑temporal)
         self.register_buffer('A', A.clone().view(-1, self.V, self.V))
 
         # number of input channels
@@ -177,7 +177,7 @@ def normalize_digraph(A):
     Dn = np.zeros((num_node, num_node))
     for i in range(num_node):
         if Dl[i] > 0:
-            Dn[i, i] = Dl[i]**(-1)
+            Dn[i, i] = Dl[i](-1)
     AD = np.dot(A, Dn)
     return AD
 
@@ -188,7 +188,7 @@ def normalize_undigraph(A):
     Dn = np.zeros((num_node, num_node))
     for i in range(num_node):
         if Dl[i] > 0:
-            Dn[i, i] = Dl[i]**(-0.5)
+            Dn[i, i] = Dl[i](-0.5)
     DAD = np.dot(np.dot(Dn, A), Dn)
     return DAD
 

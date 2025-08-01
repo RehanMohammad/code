@@ -179,7 +179,7 @@ class PosEmbFactory(nn.Module):
         else:
             raise ValueError(f"Unknown {self.pos_type}")
 
-    def __str__(self):
+    def _str_(self):
         st = f"type={self.emb_type}, scale={self.scale}, normalize={self.normalize}"
         if hasattr(self, "gauss_B"):
             st += (
